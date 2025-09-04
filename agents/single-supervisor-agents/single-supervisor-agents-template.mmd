@@ -1,0 +1,37 @@
+graph TD
+    A[User Input] --> B[Supervisor]
+    
+    B --> C[Example Agent]
+    B --> D[Helper Agent]
+    B --> E[COMPLETE]
+    
+    C --> F[Example Tools]
+    D --> G[No Tools]
+    
+    F --> B
+    G --> B
+    
+    subgraph "Single Supervisor Template - Flat Architecture"
+        subgraph "Routing Logic"
+            B["Supervisor<br/>(Routes based on content)"]
+        end
+        
+        subgraph "Worker Agents"
+            C["Example Agent<br/>(With tools)"]
+            D["Helper Agent<br/>(No tools)"]
+        end
+    end
+    
+    subgraph "Tool Configuration Examples"
+        F["ExampleTool<br/>(Configurable)"]
+        G["Pure LLM<br/>(No external tools)"]
+    end
+    
+    note1["`Template for creating<br/>your own flat supervisor system`"]
+    
+    style A fill:#e1f5fe
+    style E fill:#e8f5e8
+    style B fill:#ffebee
+    style C fill:#e3f2fd
+    style D fill:#fff3e0
+    style note1 fill:#fffde7

@@ -1,0 +1,74 @@
+# Generic Agent System Configuration Template
+# 
+# This YAML file defines your multi-agent system.
+# Agents are created automatically from this configuration.
+
+# Define your agents
+agents:
+  # Each agent needs a unique ID (lowercase, no spaces)
+  example_agent:
+    # Model to use (optional, defaults to gpt-4)
+    model: gpt-4
+    
+    # Temperature (optional, defaults to 0.7)
+    temperature: 0.7
+    
+    # Agent instructions/prompt
+    # Focus on WHAT the agent should do, not HOW to use tools
+    # Agents automatically receive conversation history with previous agent outputs
+    instructions: |
+      You are the Example Agent.
+      
+      Your role is to help users with example tasks.
+      Be helpful and concise.
+      
+      IMPORTANT: Check for [Previous Agent Output] sections in the conversation.
+      Use data from previous agents instead of making duplicate API calls.
+      
+      Today's date: {{date}}
+    
+    # Tools this agent can access (optional)
+    # List the tool categories from Arcade (e.g., Jira, Sharepoint, etc.)
+    # The agent will automatically discover available tools and how to use them
+    tools:
+      - ExampleTool
+  
+  # Another agent example
+  helper_agent:
+    instructions: |
+      You are the Helper Agent.
+      
+      You assist with general questions and tasks.
+      
+      Today's date: {{date}}
+    
+    # No tools specified = no tool access
+  
+  # Supervisor agent (routes requests to other agents)
+  supervisor:
+    instructions: |
+      You are the Supervisor Agent.
+      
+      Analyze the user's request and route to the appropriate agent:
+      - example_agent: For example-related tasks
+      - helper_agent: For general help and questions
+      - COMPLETE: When the request has been fulfilled
+      
+      IMPORTANT:
+      - Analyze the ENTIRE conversation including all previous agent outputs
+      - Previous agents may have retrieved data that subsequent agents need
+      - Route to the next agent that needs to act on the data
+      - Only return COMPLETE when all requested actions are done
+      
+      Look at the conversation history. If an agent has already responded
+      (shown as "agent_name: response"), only route again if needed.
+      
+      Respond with ONLY the agent ID or COMPLETE.
+
+# Routing configuration
+routing:
+  # Which agent acts as the supervisor/router
+  supervisor: supervisor
+  
+  # Maximum routing iterations before stopping
+  max_iterations: 10

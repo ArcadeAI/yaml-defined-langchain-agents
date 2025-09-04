@@ -1,0 +1,57 @@
+graph TD
+    A[User Input] --> B[Master Supervisor]
+    
+    B --> C[Department A Supervisor]
+    B --> D[Department B Supervisor] 
+    B --> E[Department C Supervisor]
+    B --> F[COMPLETE]
+    
+    subgraph "Department A"
+        C --> G[Agent A1]
+        C --> H[Agent A2]
+        
+        G --> I[Toolkit A Tools]
+        H --> J[Toolkit A Tools]
+        
+        I --> C
+        J --> C
+    end
+    
+    subgraph "Department B"
+        D --> K[Agent B1]
+        D --> L[Agent B2]
+        
+        K --> M[Toolkit B Tools]
+        L --> N[Toolkit B Tools]
+        
+        M --> D
+        N --> D
+    end
+    
+    subgraph "Department C"
+        E --> O[Agent C1]
+        
+        O --> P[Toolkit C Tools]
+        
+        P --> E
+    end
+    
+    C --> B
+    D --> B
+    E --> B
+    
+    subgraph "Template Structure"
+        Q["Replace Department Names<br/>with your use case:<br/>Sales, Marketing, Operations<br/>Finance, Support, etc."]
+        R["Replace Agent Names<br/>with your specialists:<br/>CRM Agent, Social Agent<br/>Billing Agent, etc."]
+        S["Replace Tool Names<br/>with your toolkits:<br/>Salesforce, Twitter<br/>QuickBooks, etc."]
+    end
+    
+    style A fill:#e1f5fe
+    style F fill:#e8f5e8
+    style B fill:#ff9999
+    style C fill:#99ccff
+    style D fill:#99ff99
+    style E fill:#ffcc99
+    style Q fill:#fffde7
+    style R fill:#fffde7
+    style S fill:#fffde7

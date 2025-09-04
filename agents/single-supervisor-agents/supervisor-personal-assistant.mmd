@@ -1,0 +1,40 @@
+graph TD
+    A[User Input] --> B[Supervisor]
+    
+    B --> C[Email Agent]
+    B --> D[Calendar Agent]
+    B --> E[Documents Agent]
+    B --> F[COMPLETE]
+    
+    C --> G[Gmail Tools]
+    D --> H[Google Calendar Tools]
+    E --> I[Google Drive + Docs Tools]
+    
+    G --> B
+    H --> B
+    I --> B
+    
+    subgraph "Personal Assistant System - Flat Supervisor"
+        subgraph "Routing Logic"
+            B
+        end
+        
+        subgraph "Specialist Agents"
+            C
+            D
+            E
+        end
+    end
+    
+    subgraph "Google Workspace Tools"
+        G
+        H
+        I
+    end
+    
+    style A fill:#e1f5fe
+    style F fill:#e8f5e8
+    style B fill:#ffebee
+    style C fill:#e3f2fd
+    style D fill:#e8f5e8
+    style E fill:#fff3e0

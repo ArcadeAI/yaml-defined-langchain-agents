@@ -1,0 +1,57 @@
+graph TD
+    A[User Input] --> B[Master Supervisor]
+    
+    B --> C[Personal Supervisor]
+    B --> D[Dev Supervisor]
+    B --> E[Knowledge Supervisor]
+    B --> F[COMPLETE]
+    
+    subgraph "Personal Department"
+        C --> G[Email Agent]
+        C --> H[Slack Agent]
+        C --> I[Calendar Agent]
+        
+        G --> J[Gmail Tools]
+        H --> K[Slack Tools]
+        I --> L[Google Calendar Tools]
+        
+        J --> C
+        K --> C
+        L --> C
+    end
+    
+    subgraph "Development Department"
+        D --> M[Jira Agent]
+        D --> N[GitHub Agent]
+        
+        M --> O[Jira Tools]
+        N --> P[GitHub Tools]
+        
+        O --> D
+        P --> D
+    end
+    
+    subgraph "Knowledge Department"
+        E --> Q[Google Drive Agent]
+        
+        Q --> R[Google Drive + Docs Tools]
+        
+        R --> E
+    end
+    
+    C --> B
+    D --> B
+    E --> B
+    
+    style A fill:#e1f5fe
+    style F fill:#e8f5e8
+    style B fill:#ff9999
+    style C fill:#99ccff
+    style D fill:#99ff99
+    style E fill:#ffcc99
+    style G fill:#e3f2fd
+    style H fill:#e3f2fd
+    style I fill:#e3f2fd
+    style M fill:#e8f5e8
+    style N fill:#e8f5e8
+    style Q fill:#fff3e0
