@@ -176,7 +176,7 @@ agents:
   # Knowledge Department Agents
   gdrive:
     model: gpt-4
-    temperature: 0.7
+    temperature: 0.1
     instructions: |
       You are the Google Drive and Google Docs Agent in the Knowledge Department.
       
@@ -205,7 +205,7 @@ agents:
   # Knowledge Department Supervisor
   knowledge_supervisor:
     model: gpt-4
-    temperature: 0.2
+    temperature: 0.9
     instructions: |
       You are the Knowledge Department Supervisor.
       
