@@ -11,6 +11,11 @@ import asyncio
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from pathlib import Path
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from phoenix.otel import register
+
+tracer_provider = register()
+LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
 
 # Load environment variables
 from dotenv import load_dotenv
