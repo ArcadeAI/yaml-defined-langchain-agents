@@ -24,7 +24,13 @@ A powerful yet simple multi-agent system using LangChain and LangGraph. Define e
    # Edit .env with your API keys
    ```
 
-3. **Run the system**:
+3. **Run Phoenix (observability)**
+   ```bash
+   phoenix serve &
+   ```
+   View will be able to view traces at http://localhost:6006/
+   
+4. **Run the system**:
    ```bash
    # Interactive mode
    python main.py
