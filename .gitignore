@@ -31,6 +31,10 @@ build/
 .DS_Store
 Thumbs.db
 
+# Dependencies
+/node_modules
+/frontend/node_modules
+
 # Logs
 *.log
 logs/
