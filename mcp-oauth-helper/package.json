@@ -1,0 +1,19 @@
+{
+  "name": "mcp-oauth-helper",
+  "version": "1.0.0",
+  "description": "OAuth helper for MCP servers using official MCP SDK",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "open": "^10.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.0.0"
+  }
+}

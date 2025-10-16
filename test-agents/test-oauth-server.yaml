@@ -1,0 +1,40 @@
+# Example: MCP server requiring OAuth token
+# Note: Server-level OAuth requires manual token acquisition
+
+# SETUP INSTRUCTIONS:
+# 1. Visit your MCP server's OAuth portal (e.g., https://oauth-server.com/authorize)
+# 2. Complete the OAuth flow to get an access token
+# 3. Add the token to your .env file:
+#    OAUTH_MCP_TOKEN=your_actual_oauth_token_here
+# 4. Run this config - it will use the token from .env
+
+mcpServers:
+  oauth_required_server:
+    url: "https://oauth-mcp-server.example.com/mcp"
+    headers:
+      Authorization: "Bearer ${OAUTH_MCP_TOKEN}"
+      # Some OAuth servers also need:
+      # X-Client-ID: "${OAUTH_CLIENT_ID}"
+
+agents:
+  oauth_assistant:
+    model: gpt-4o
+    temperature: 0.7
+    instructions: |
+      You are a helpful assistant with access to OAuth-protected tools.
+      Today's date: {{date}}
+    tools: []
+
+routing:
+  supervisor: oauth_assistant
+  max_iterations: 10
+
+# TROUBLESHOOTING:
+# - If you see "401 Unauthorized" or "403 Forbidden" errors:
+#   → Check that OAUTH_MCP_TOKEN is set in .env
+#   → Verify the token hasn't expired
+#   → Confirm the token has the right scopes/permissions
+# 
+# - Tool-level OAuth (separate from server OAuth) is handled automatically
+#   → System will prompt you with authorization URLs when tools need it
+

@@ -1,0 +1,70 @@
+# Linear MCP Server with Automatic OAuth
+# This configuration demonstrates automatic OAuth flow for server-level authentication
+
+# SETUP INSTRUCTIONS:
+# 1. Register OAuth App in Linear:
+#    - Go to https://linear.app/settings/api
+#    - Click "Create OAuth App"
+#    - Name: "MCP Agent Integration" (or your choice)
+#    - Redirect URI: http://localhost:8080/callback
+#    - Scopes: read, write, issues:create, issues:update, comments:create
+#    - Save and copy Client ID and Client Secret
+#
+# 2. Set environment variables:
+#    export LINEAR_CLIENT_ID=your_client_id
+#    export LINEAR_CLIENT_SECRET=your_client_secret
+#
+# 3. Run this config:
+#    python main.py test-agents/test-linear-oauth.yaml "List my Linear issues"
+#
+# 4. On first run:
+#    - Browser will open automatically for Linear OAuth
+#    - Click "Authorize" in Linear
+#    - Token is automatically retrieved and used
+#    - (Optional) Save token in .env for future use
+
+mcpServers:
+  linear:
+    url: "https://mcp.linear.app/mcp"
+    # OAuth will be attempted automatically for Linear MCP server
+    # No need to specify oauth section - it's auto-detected!
+    
+    # Optional: Explicit OAuth configuration
+    # oauth:
+    #   enabled: true
+    #   provider: linear  # auto-detected from URL
+    #   client_id: ${LINEAR_CLIENT_ID}  # or set directly
+    #   client_secret: ${LINEAR_CLIENT_SECRET}
+
+agents:
+  linear_agent:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      You are a Linear project management assistant.
+      You can help with:
+      - Listing issues and projects
+      - Creating new issues
+      - Updating issue status
+      - Adding comments
+      - Searching for specific issues
+      
+      Today's date: {{date}}
+    tools: []  # Will get all Linear tools from MCP server
+
+routing:
+  supervisor: linear_agent
+  max_iterations: 15
+
+# USAGE EXAMPLES:
+# python main.py test-agents/test-linear-oauth.yaml "List all issues assigned to me"
+# python main.py test-agents/test-linear-oauth.yaml "Create an issue: Fix login bug"
+# python main.py test-agents/test-linear-oauth.yaml "What projects do I have access to?"
+# python main.py test-agents/test-linear-oauth.yaml "Update issue status to In Progress"
+
+# TIPS:
+# - First run will open browser for OAuth authorization
+# - Subsequent runs will use cached token (if saved to .env)
+# - Use --debug flag to see OAuth flow details:
+#   python main.py --debug test-agents/test-linear-oauth.yaml "test"
+

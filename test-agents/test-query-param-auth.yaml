@@ -1,0 +1,22 @@
+# Example: MCP server with API key in query parameter
+# Use case: Services that authenticate via URL params instead of headers
+
+mcpServers:
+  query_param_server:
+    # API key embedded in URL as query parameter
+    url: "https://api.example.com/mcp?api_key=${API_KEY}&user_id=${USER_ID}"
+    # No headers needed - auth is in the URL!
+
+agents:
+  assistant:
+    model: gpt-4o
+    temperature: 0.7
+    instructions: |
+      You are a helpful assistant with access to tools.
+      Today's date: {{date}}
+    tools: []  # Will get all tools from the server
+
+routing:
+  supervisor: assistant
+  max_iterations: 10
+

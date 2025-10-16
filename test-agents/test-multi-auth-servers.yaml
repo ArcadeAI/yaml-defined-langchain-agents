@@ -1,0 +1,50 @@
+# Example: Multiple MCP servers with different authentication methods
+# Demonstrates flexibility of the configuration system
+
+mcpServers:
+  # 1. Header-based authentication (Bearer token)
+  arcade:
+    url: "https://api.arcade.dev/mcp"
+    headers:
+      Authorization: "Bearer ${ARCADE_API_KEY}"
+      Arcade-User-ID: "${ARCADE_USER_ID}"
+  
+  # 2. Query parameter authentication
+  api_key_service:
+    url: "https://api.example.com/mcp?key=${SERVICE_API_KEY}"
+  
+  # 3. Custom header authentication
+  custom_service:
+    url: "https://custom-mcp.example.com/mcp"
+    headers:
+      X-API-Key: "${CUSTOM_API_KEY}"
+      X-Client-ID: "my-agent-system"
+  
+  # 4. Multiple query parameters
+  multi_param_service:
+    url: "https://api.multi.com/mcp?api_key=${MULTI_KEY}&app_id=${APP_ID}&version=v1"
+  
+  # 5. No authentication (open/local development)
+  local_dev:
+    url: "http://localhost:3000/mcp"
+  
+  # 6. Mixed auth (both header and query param)
+  hybrid_service:
+    url: "https://api.hybrid.com/mcp?client_id=${CLIENT_ID}"
+    headers:
+      X-Session-Token: "${SESSION_TOKEN}"
+
+agents:
+  multi_service_assistant:
+    model: gpt-4o
+    temperature: 0.7
+    instructions: |
+      You are a helpful assistant with access to tools from multiple services.
+      Each service may have different capabilities.
+      Today's date: {{date}}
+    tools: []  # Gets all tools from ALL configured servers
+
+routing:
+  supervisor: multi_service_assistant
+  max_iterations: 15
+

@@ -56,6 +56,9 @@ except ImportError:
     print("⚠️  MCP SDK not installed. Tool functionality will be disabled.")
     print("   Install with: pip install mcp")
 
+# OAuth will be handled by TypeScript helper using MCP SDK
+# See mcp-oauth-helper/ directory for OAuth implementation
+
 
 # Default Arcade MCP gateway URL
 # This single gateway provides access to all Arcade tools
@@ -115,6 +118,17 @@ class YAMLAgentSystem:
         
         print(f"✓ Initialized {len(self.agents)} agents")
     
+    def _substitute_env_vars(self, value: str) -> str:
+        """Substitute environment variables in a string."""
+        if isinstance(value, str) and '${' in value:
+            # Handle multiple env vars in same string
+            import re
+            def replace_env_var(match):
+                env_var = match.group(1)
+                return os.getenv(env_var, match.group(0))
+            return re.sub(r'\$\{([^}]+)\}', replace_env_var, value)
+        return value
+    
     async def _initialize_mcp_servers(self):
         """Initialize tools from explicitly configured MCP servers."""
         try:
@@ -126,28 +140,53 @@ class YAMLAgentSystem:
             self.tools = []
             
             for server_name, server_config in mcp_servers.items():
+                # Get URL and apply env var substitution (for query params)
                 url = server_config.get('url')
-                headers = server_config.get('headers', {})
+                if url:
+                    url = self._substitute_env_vars(url)
                 
-                # Support environment variable substitution in headers
+                # Process headers
+                headers = server_config.get('headers', {})
                 processed_headers = {}
                 for key, value in headers.items():
-                    if isinstance(value, str) and value.startswith('${') and value.endswith('}'):
-                        env_var = value[2:-1]
-                        processed_headers[key] = os.getenv(env_var, value)
-                    else:
-                        processed_headers[key] = value
+                    processed_headers[key] = self._substitute_env_vars(str(value))
                 
-                # Automatically add Arcade credentials from .env if not already specified
+                # Automatically add Arcade credentials for Arcade servers only
+                if url and 'arcade.dev' in url:
+                    if 'Authorization' not in processed_headers:
+                        arcade_key = os.getenv('ARCADE_API_KEY')
+                        if arcade_key:
+                            processed_headers['Authorization'] = f"Bearer {arcade_key}"
+                    
+                    if 'Arcade-User-ID' not in processed_headers:
+                        user_id = os.getenv('ARCADE_USER_ID')
+                        if user_id:
+                            processed_headers['Arcade-User-ID'] = user_id
+                
+                # Check for token in environment (from TypeScript OAuth helper)
+                # The mcp-oauth-helper stores tokens in ~/.mcp-oauth-tokens.json
+                # and you can also export tokens to environment variables
                 if 'Authorization' not in processed_headers:
-                    arcade_key = os.getenv('ARCADE_API_KEY')
-                    if arcade_key:
-                        processed_headers['Authorization'] = f"Bearer {arcade_key}"
-                
-                if 'Arcade-User-ID' not in processed_headers:
-                    user_id = os.getenv('ARCADE_USER_ID')
-                    if user_id:
-                        processed_headers['Arcade-User-ID'] = user_id
+                    # Check for common OAuth token environment variable patterns
+                    # Linear: LINEAR_ACCESS_TOKEN, Arcade: ARCADE_API_KEY, etc.
+                    server_domain = url.replace('https://', '').replace('http://', '').split('/')[0]
+                    server_domain_clean = server_domain.replace('.', '_').replace('-', '_').upper()
+                    
+                    # Try multiple token environment variable patterns
+                    token_var_patterns = [
+                        f"{server_domain_clean}_ACCESS_TOKEN",
+                        f"{server_domain_clean}_TOKEN",
+                        f"{server_name.upper()}_ACCESS_TOKEN",
+                        f"{server_name.upper()}_TOKEN",
+                    ]
+                    
+                    for token_var in token_var_patterns:
+                        token = os.getenv(token_var)
+                        if token:
+                            if self.debug:
+                                print(f"[MCP] Using token from {token_var}")
+                            processed_headers['Authorization'] = f"Bearer {token}"
+                            break
                 
                 if self.debug:
                     print(f"[MCP] Connecting to {server_name} at {url}")
@@ -177,9 +216,20 @@ class YAMLAgentSystem:
                                 if self.debug:
                                     print(f"[MCP]   - {mcp_tool.name}: {mcp_tool.description[:80] if mcp_tool.description else 'No description'}...")
                 except Exception as session_error:
+                    error_msg = str(session_error)
+                    
+                    # Check for OAuth/authorization errors at server connection level
+                    if any(keyword in error_msg.lower() for keyword in ['unauthorized', '401', 'forbidden', '403', 'authorization', 'oauth']):
+                        print(f"⚠️  {server_name} requires authorization: {error_msg}")
+                        if self.debug:
+                            print(f"[MCP] Server-level authorization required for {server_name}")
+                            print(f"[MCP] Tip: Check if server needs OAuth or API key in headers/URL")
                     # Suppress harmless "Session termination failed: 202" errors
-                    if "Session termination failed" not in str(session_error) and "202" not in str(session_error):
-                        raise
+                    elif "Session termination failed" not in error_msg and "202" not in error_msg:
+                        print(f"⚠️  Failed to connect to {server_name}: {error_msg}")
+                        if self.debug:
+                            import traceback
+                            traceback.print_exc()
             
             if self.debug:
                 print(f"✓ Initialized {len(self.tools)} MCP tools from {len(mcp_servers)} servers")

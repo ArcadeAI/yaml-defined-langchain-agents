@@ -222,17 +222,127 @@ python main.py --debug agents.yaml "Create a Jira ticket"
 - **Template Variables**: Use `{{date}}` in instructions for dynamic content
 - **Conversation Tracking**: Full history maintained through graph state
 
+## MCP Client Implementation
+
+This system includes a **native MCP (Model Context Protocol) client** that connects directly to MCP servers and gateways. Unlike wrapper libraries, this implementation uses the official MCP SDK to:
+
+### What is MCP?
+
+MCP is an open protocol that standardizes how applications provide tools and context to LLMs. Instead of creating custom integrations for every service, MCP provides a universal interface:
+
+```
+Your Agents → MCP Client → MCP Gateway/Server → Tools (Gmail, Jira, GitHub, etc.)
+```
+
+### How Our MCP Client Works
+
+1. **Connection**: Creates HTTP-based MCP sessions using `streamablehttp_client`
+2. **Discovery**: Queries MCP servers with `list_tools()` to discover available tools
+3. **Conversion**: Transforms MCP tool schemas into LangChain `StructuredTool` objects
+4. **Execution**: Wraps each tool call in a new MCP session with `call_tool()`
+5. **Authorization**: Detects auth requirements from tool responses and surfaces OAuth URLs
+
+### Configuration Options
+
+**Option 1: Explicit MCP Servers** (Recommended)
+
+The system supports various authentication methods for MCP servers:
+
+```yaml
+mcpServers:
+  # Header-based authentication
+  arcade:
+    url: https://api.arcade.dev/mcp
+    headers:
+      Authorization: Bearer ${ARCADE_API_KEY}
+      Arcade-User-ID: ${ARCADE_USER_ID}
+  
+  # Query parameter authentication (API key in URL)
+  api_key_server:
+    url: https://api.example.com/mcp?api_key=${API_KEY}&user=${USER_ID}
+    # No headers needed!
+  
+  # Custom header authentication
+  custom_server:
+    url: https://your-mcp-server.com/mcp
+    headers:
+      X-API-Key: ${CUSTOM_API_KEY}
+      X-Custom-Header: some-value
+  
+  # No authentication (open server)
+  local_dev:
+    url: http://localhost:3000/mcp
+```
+
+**Environment Variable Substitution:**
+- Use `${VAR_NAME}` syntax anywhere in `url` or `headers`
+- Works with multiple variables: `url: https://api.com/mcp?key=${KEY}&id=${ID}`
+- Falls back to literal string if environment variable not found
+
+**Option 2: Backward Compatible** (Auto-detects Arcade)
+```yaml
+# Just define tools - system auto-connects to Arcade MCP gateway
+agents:
+  assistant:
+    tools: [Gmail, Jira]
+```
+
+### Authentication & OAuth Support
+
+The system handles two types of OAuth/authorization:
+
+**1. Tool-Level OAuth** (Fully Automatic):
+```yaml
+# Agent tries to use Gmail.SendEmail
+# → Tool requires OAuth → System shows auth URL
+# → User authorizes → Types 'continue' → Request succeeds
+```
+
+**2. Server-Level OAuth** (Manual Configuration):
+```yaml
+mcpServers:
+  oauth_server:
+    url: https://oauth-mcp-server.com/mcp
+    headers:
+      Authorization: Bearer ${OAUTH_TOKEN}
+      # You must obtain this token through the server's OAuth flow first
+```
+
+**How to Handle Server-Level OAuth:**
+1. Visit the MCP server's documentation for OAuth setup
+2. Complete their OAuth flow to get an access token
+3. Store the token in your `.env` file
+4. Reference it in your YAML config with `${TOKEN_VAR}`
+
+**Error Detection:**
+- System detects 401/403 errors during server connection
+- Provides helpful error messages for authorization issues
+- Tool-level OAuth is handled automatically with interactive prompts
+
+### Key Features
+
+- **Multi-Server Support**: Connect to multiple MCP servers simultaneously
+- **Automatic Tool Discovery**: No manual tool registration needed
+- **Session Management**: Creates fresh MCP sessions for each tool call
+- **Environment Variables**: Supports `${VAR}` syntax in URLs and headers
+- **Error Handling**: Gracefully handles MCP session termination messages
+- **Authorization Flow**: Automatically detects OAuth requirements (tool-level)
+- **Flexible Auth**: Supports headers, query params, or no auth
+
 ## Architecture Overview
 
 ```
-YAML Config → main.py → LangChain Agents → LangGraph Router → Arcade Tools
+YAML Config → MCP Client → Tool Discovery → LangChain Agents → LangGraph Router
+                ↓
+         MCP Gateway/Server → External Tools (Gmail, Jira, etc.)
 ```
 
 The system automatically:
 1. Parses YAML configuration into agent definitions
-2. Creates LangChain agents with OpenAI integration  
-3. Builds LangGraph StateGraph for routing
-4. Discovers and registers Arcade tools
-5. Manages conversation flow and authorization
+2. Connects to MCP servers and discovers available tools
+3. Converts MCP tools to LangChain format
+4. Creates LangChain agents with OpenAI integration  
+5. Builds LangGraph StateGraph for routing
+6. Manages conversation flow and authorization
 
 For technical implementation details, see [TECHNICAL.md](TECHNICAL.md).
