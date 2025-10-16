@@ -1,0 +1,56 @@
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/agent"
+
+agents:
+  email:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      You are the Email Agent. Handle Gmail tasks efficiently.
+      Execute tasks immediately using Gmail tools.
+      Today's date: {{date}}
+    tools:
+      - Gmail
+  
+  project_manager:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      You are the Project Manager. Handle project tracking tasks.
+      Use Linear for project management and GitHub for code.
+      Execute tasks immediately.
+      Today's date: {{date}}
+    tools:
+      - Linear
+      - GitHub
+  
+  social_media:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      You are the Social Media Manager.
+      Handle LinkedIn, Reddit, and Slack communications.
+      Execute tasks immediately.
+      Today's date: {{date}}
+    tools:
+      - LinkedIn
+      - Reddit
+      - Slack
+  
+  supervisor:
+    model: gpt-4o
+    temperature: 0.1
+    instructions: |
+      You are the Supervisor. Route requests efficiently:
+      - email: Gmail tasks
+      - project_manager: Linear, GitHub, project tracking
+      - social_media: LinkedIn, Reddit, Slack
+      - COMPLETE: when done
+      
+      Respond with ONLY the agent ID or COMPLETE.
+
+routing:
+  supervisor: supervisor
+  max_iterations: 15
+

@@ -1,0 +1,124 @@
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/agent"
+
+agents:
+  # Communications Department
+  email:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Email Agent. Handle Gmail tasks efficiently.
+      Today's date: {{date}}
+    tools:
+      - Gmail
+  
+  slack:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Slack Agent. Handle Slack communications efficiently.
+      Today's date: {{date}}
+    tools:
+      - Slack
+  
+  communications_supervisor:
+    model: gpt-4o
+    temperature: 0.1
+    instructions: |
+      Communications Supervisor. Route communication tasks:
+      - email: Gmail tasks
+      - slack: Slack tasks
+      - COMPLETE: when done
+      
+      Respond with ONLY the agent ID or COMPLETE.
+  
+  # Engineering Department
+  github:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      GitHub Agent. Handle repository and code tasks.
+      Today's date: {{date}}
+    tools:
+      - GitHub
+  
+  linear:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Linear Agent. Handle project tracking and issues.
+      Today's date: {{date}}
+    tools:
+      - Linear
+  
+  jira:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Jira Agent. Handle ticket and project management.
+      Today's date: {{date}}
+    tools:
+      - Jira
+  
+  engineering_supervisor:
+    model: gpt-4o
+    temperature: 0.1
+    instructions: |
+      Engineering Supervisor. Route engineering tasks:
+      - github: GitHub repository tasks
+      - linear: Linear project tracking
+      - jira: Jira ticket management
+      - COMPLETE: when done
+      
+      Respond with ONLY the agent ID or COMPLETE.
+  
+  # Content Department
+  google_docs:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Google Docs Agent. Handle document creation and editing.
+      Today's date: {{date}}
+    tools:
+      - GoogleDocs
+      - GoogleDrive
+  
+  google_slides:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      Google Slides Agent. Handle presentation creation.
+      Today's date: {{date}}
+    tools:
+      - GoogleSlides
+  
+  content_supervisor:
+    model: gpt-4o
+    temperature: 0.1
+    instructions: |
+      Content Supervisor. Route content creation tasks:
+      - google_docs: Document creation and editing
+      - google_slides: Presentation creation
+      - COMPLETE: when done
+      
+      Respond with ONLY the agent ID or COMPLETE.
+  
+  # Master Supervisor
+  master_supervisor:
+    model: gpt-4o
+    temperature: 0.1
+    instructions: |
+      Master Supervisor. Route to departments:
+      - communications_supervisor: Email, Slack tasks
+      - engineering_supervisor: GitHub, Linear, Jira tasks
+      - content_supervisor: Google Docs, Slides tasks
+      - COMPLETE: when all tasks done
+      
+      Check conversation history for completed work.
+      Respond with ONLY the department supervisor ID or COMPLETE.
+
+routing:
+  supervisor: master_supervisor
+  max_iterations: 25
+

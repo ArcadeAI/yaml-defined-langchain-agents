@@ -11,6 +11,12 @@
 # 3. Update tool assignments based on your available toolkits
 # 4. Modify routing logic in supervisors for your workflow
 
+# Define MCP servers (tool gateways)
+# The system will connect to these servers to discover and use tools
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/<slug>"  # Arcade MCP gateway URL (replace <slug> with your gateway)
+
 agents:
   # ========================================
   # DEPARTMENT A AGENTS

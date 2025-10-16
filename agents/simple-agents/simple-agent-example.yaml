@@ -1,6 +1,10 @@
 # Simple Google Assistant - Single agent with Google tools
 # Perfect starting point for the workshop
 
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/<slug>"
+
 agents:
   assistant:
     instructions: |

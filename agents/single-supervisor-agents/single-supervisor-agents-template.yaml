@@ -3,6 +3,12 @@
 # This YAML file defines your multi-agent system.
 # Agents are created automatically from this configuration.
 
+# Define MCP servers (tool gateways)
+# The system will connect to these servers to discover and use tools
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/<slug>"  # Arcade MCP gateway URL (replace <slug> with your gateway)
+
 # Define your agents
 agents:
   # Each agent needs a unique ID (lowercase, no spaces)

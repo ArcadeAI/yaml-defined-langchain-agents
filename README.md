@@ -6,9 +6,11 @@ A powerful yet simple multi-agent system using LangChain and LangGraph. Define e
 
 - **Pure YAML Configuration**: Define agents, tools, and routing in YAML
 - **Hierarchical Agent Teams**: Multi-level supervisor architecture with department specialization  
-- **Automatic Tool Discovery**: Agents automatically discover and use Arcade tools
+- **MCP Client Integration**: Connect to any MCP gateway for tool access (including Arcade's MCP gateways)
+- **Automatic Tool Discovery**: Agents automatically discover and use tools from MCP servers
 - **Smart OAuth Handling**: Built-in authorization flow with proper interrupt handling
 - **Flexible Routing**: From simple single agents to complex multi-department workflows
+- **Phoenix Observability**: Built-in tracing and monitoring with Phoenix/OpenInference
 - **Debug Mode**: Comprehensive debugging with `--debug` flag
 
 ## Quick Start

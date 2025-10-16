@@ -1,6 +1,10 @@
 # IT Helpdesk Agent System - Clean Version
 # No explicit tool instructions - agents discover tools automatically
 
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/<slug>"
+
 agents:
   # Ticket agent - handles ticket queries
   ticket:

@@ -1,3 +1,7 @@
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/<slug>"
+
 agents:
   # Personal Department Agents
   email:

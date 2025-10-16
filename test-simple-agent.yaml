@@ -1,0 +1,22 @@
+mcpServers:
+  arcade_gateway:
+    url: "https://api.arcade.dev/mcp/agent"
+
+agents:
+  gmail_assistant:
+    model: gpt-4o
+    temperature: 0
+    instructions: |
+      You are a Gmail Assistant.
+      
+      Help users manage their Gmail efficiently:
+      - Search and read emails
+      - Send emails
+      - Organize with labels
+      
+      Use Gmail tools to complete tasks. Be concise.
+      
+      Today's date: {{date}}
+    tools:
+      - Gmail
+

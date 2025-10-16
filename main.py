@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-YAML-driven agent system using LangChain and LangGraph.
+YAML-driven agent system using LangChain and LangGraph with MCP client support.
 Usage: python main.py [config.yaml] [request]
 """
 
@@ -16,22 +16,50 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+# Suppress harmless MCP session termination warnings
+import warnings
+warnings.filterwarnings('ignore', message='.*Session termination failed.*')
+
+# Phoenix/OpenInference Observability (optional)
+try:
+    import phoenix as px
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+    from phoenix.otel import register
+    
+    # Auto-launch Phoenix for workshop simplicity
+    phoenix_session = px.launch_app()
+    print(f"🔍 Phoenix observability started at http://localhost:{phoenix_session.port}")
+    
+    # Register Phoenix tracer
+    tracer_provider = register()
+    LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+    HAS_PHOENIX = True
+except ImportError:
+    HAS_PHOENIX = False
+    print("⚠️  Phoenix observability not available. Install with: pip install arize-phoenix")
+
 # LangChain/LangGraph imports
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.prebuilt import create_react_agent, ToolNode
 
-# Optional Arcade import
+# MCP SDK imports
 try:
-    from arcadepy import Arcade, PermissionDeniedError
-    from langchain_arcade import ToolManager
-    HAS_ARCADE = True
+    from mcp import ClientSession, types
+    from mcp.client.streamable_http import streamablehttp_client
+    HAS_MCP = True
 except ImportError:
-    HAS_ARCADE = False
-    print("⚠️  Arcade not installed. Tool functionality will be disabled.")
-    print("   Install with: pip install arcadepy langchain-arcade")
+    HAS_MCP = False
+    print("⚠️  MCP SDK not installed. Tool functionality will be disabled.")
+    print("   Install with: pip install mcp")
+
+
+# Default Arcade MCP gateway URL
+# This single gateway provides access to all Arcade tools
+ARCADE_MCP_GATEWAY = os.getenv('ARCADE_MCP_GATEWAY', 'https://api.arcade.dev/mcp')
 
 
 class YAMLAgentState(MessagesState):
@@ -43,13 +71,13 @@ class YAMLAgentState(MessagesState):
 
 
 class YAMLAgentSystem:
-    """YAML-driven multi-agent system using LangChain and LangGraph."""
+    """YAML-driven multi-agent system using LangChain and LangGraph with MCP client support."""
     
     def __init__(self, config_path: str = "agents.yaml", debug: bool = False):
         self.config_path = config_path
         self.config = {}
         self.agents = {}
-        self.arcade = None
+        self.mcp_sessions = {}  # Store MCP client sessions by gateway URL
         self.tools = []
         self.conversation = []
         self.debug = debug
@@ -62,15 +90,20 @@ class YAMLAgentSystem:
         with open(self.config_path, 'r') as f:
             self.config = yaml.safe_load(f)
         
-        # Initialize Arcade if we have tools
-        if HAS_ARCADE and any(agent.get('tools') for agent in self.config.get('agents', {}).values()):
-            arcade_key = os.getenv('ARCADE_API_KEY')
-            if arcade_key:
-                self.arcade = Arcade(api_key=arcade_key)
-                # Initialize tools with proper user_id
-                self._initialize_tools()
-            else:
-                print("⚠️  ARCADE_API_KEY not set. Tool functionality will be limited.")
+        # Initialize MCP tools
+        if HAS_MCP:
+            # Check if we have explicit mcpServers configuration
+            if 'mcpServers' in self.config:
+                await self._initialize_mcp_servers()
+            # Otherwise, use backward-compatible Arcade gateway if agents have tools
+            elif any(agent.get('tools') for agent in self.config.get('agents', {}).values()):
+                arcade_key = os.getenv('ARCADE_API_KEY')
+                user_id = os.getenv('ARCADE_USER_ID')
+                
+                if arcade_key and user_id:
+                    await self._initialize_tools()
+                else:
+                    print("⚠️  ARCADE_API_KEY or ARCADE_USER_ID not set. Tool functionality will be limited.")
         
         # Create agents
         for agent_id, agent_config in self.config.get('agents', {}).items():
@@ -82,38 +115,222 @@ class YAMLAgentSystem:
         
         print(f"✓ Initialized {len(self.agents)} agents")
     
-    def _initialize_tools(self):
-        """Initialize Arcade tools."""
-        if not self.arcade:
-            return
-            
+    async def _initialize_mcp_servers(self):
+        """Initialize tools from explicitly configured MCP servers."""
         try:
-            # Get all unique toolkits mentioned in agent configs
-            toolkits = set()
-            for agent_config in self.config.get('agents', {}).values():
-                for tool_spec in agent_config.get('tools', []):
-                    if isinstance(tool_spec, str):
-                        toolkits.add(tool_spec)
-                    elif isinstance(tool_spec, dict) and 'toolkit' in tool_spec:
-                        toolkits.add(tool_spec['toolkit'])
+            mcp_servers = self.config.get('mcpServers', {})
             
-            if toolkits:
-                # Initialize ToolManager with user_id from environment
-                arcade_key = os.getenv('ARCADE_API_KEY')
-                user_id = os.getenv('ARCADE_USER_ID', 'default')
+            if self.debug:
+                print(f"[MCP] Found {len(mcp_servers)} configured MCP servers")
+            
+            self.tools = []
+            
+            for server_name, server_config in mcp_servers.items():
+                url = server_config.get('url')
+                headers = server_config.get('headers', {})
                 
-                self.tool_manager = ToolManager(
-                    api_key=arcade_key,
-                    user_id=user_id
-                )
-                self.tool_manager.init_tools(toolkits=list(toolkits))
-                self.tools = self.tool_manager.to_langchain(use_interrupts=True)
+                # Support environment variable substitution in headers
+                processed_headers = {}
+                for key, value in headers.items():
+                    if isinstance(value, str) and value.startswith('${') and value.endswith('}'):
+                        env_var = value[2:-1]
+                        processed_headers[key] = os.getenv(env_var, value)
+                    else:
+                        processed_headers[key] = value
+                
+                # Automatically add Arcade credentials from .env if not already specified
+                if 'Authorization' not in processed_headers:
+                    arcade_key = os.getenv('ARCADE_API_KEY')
+                    if arcade_key:
+                        processed_headers['Authorization'] = f"Bearer {arcade_key}"
+                
+                if 'Arcade-User-ID' not in processed_headers:
+                    user_id = os.getenv('ARCADE_USER_ID')
+                    if user_id:
+                        processed_headers['Arcade-User-ID'] = user_id
                 
                 if self.debug:
-                    print(f"✓ Initialized {len(self.tools)} tools from {len(toolkits)} toolkits with user_id: {user_id}")
+                    print(f"[MCP] Connecting to {server_name} at {url}")
+                
+                # Connect to MCP server
+                try:
+                    async with streamablehttp_client(url, headers=processed_headers) as (read, write, _):
+                        async with ClientSession(read, write) as session:
+                            await session.initialize()
+                            
+                            # List all available tools from this server
+                            tools_response = await session.list_tools()
+                            
+                            if self.debug:
+                                print(f"[MCP] Found {len(tools_response.tools)} tools from {server_name}")
+                            
+                            # Store connection info for this server
+                            self.mcp_sessions[server_name] = {
+                                'url': url,
+                                'headers': processed_headers
+                            }
+                            
+                            # Convert MCP tools to LangChain tools
+                            for mcp_tool in tools_response.tools:
+                                langchain_tool = self._mcp_tool_to_langchain(mcp_tool, url, processed_headers)
+                                self.tools.append(langchain_tool)
+                                if self.debug:
+                                    print(f"[MCP]   - {mcp_tool.name}: {mcp_tool.description[:80] if mcp_tool.description else 'No description'}...")
+                except Exception as session_error:
+                    # Suppress harmless "Session termination failed: 202" errors
+                    if "Session termination failed" not in str(session_error) and "202" not in str(session_error):
+                        raise
+            
+            if self.debug:
+                print(f"✓ Initialized {len(self.tools)} MCP tools from {len(mcp_servers)} servers")
                     
         except Exception as e:
-            print(f"Warning: Could not initialize tools: {e}")
+            print(f"Warning: Could not initialize MCP servers: {e}")
+            if self.debug:
+                import traceback
+                traceback.print_exc()
+    
+    async def _initialize_tools(self):
+        """Initialize tools from Arcade MCP gateway (backward compatibility)."""
+        try:
+            arcade_key = os.getenv('ARCADE_API_KEY')
+            user_id = os.getenv('ARCADE_USER_ID')
+            
+            if not arcade_key or not user_id:
+                return
+            
+            # Connect to Arcade MCP gateway
+            headers = {
+                "Authorization": f"Bearer {arcade_key}",
+                "Arcade-User-ID": user_id
+            }
+            
+            if self.debug:
+                print(f"[MCP] Connecting to Arcade MCP gateway: {ARCADE_MCP_GATEWAY}")
+            
+            # Create MCP client session
+            try:
+                async with streamablehttp_client(ARCADE_MCP_GATEWAY, headers=headers) as (read, write, _):
+                    async with ClientSession(read, write) as session:
+                        await session.initialize()
+                        
+                        # List all available tools from the gateway
+                        tools_response = await session.list_tools()
+                        
+                        if self.debug:
+                            print(f"[MCP] Found {len(tools_response.tools)} tools from gateway")
+                        
+                        # Convert MCP tools to LangChain tools
+                        self.tools = []
+                        for mcp_tool in tools_response.tools:
+                            langchain_tool = self._mcp_tool_to_langchain(mcp_tool, ARCADE_MCP_GATEWAY, headers)
+                            self.tools.append(langchain_tool)
+                        
+                        if self.debug:
+                            print(f"✓ Initialized {len(self.tools)} MCP tools")
+            except Exception as session_error:
+                # Suppress harmless "Session termination failed: 202" errors
+                if "Session termination failed" not in str(session_error) and "202" not in str(session_error):
+                    raise
+                    
+        except Exception as e:
+            print(f"Warning: Could not initialize MCP tools: {e}")
+            if self.debug:
+                import traceback
+                traceback.print_exc()
+    
+    def _mcp_tool_to_langchain(self, mcp_tool: types.Tool, gateway_url: str, headers: Dict[str, str]) -> StructuredTool:
+        """Convert an MCP tool to a LangChain StructuredTool."""
+        
+        # Store original name for MCP calls
+        original_tool_name = mcp_tool.name
+        
+        # Sanitize tool name for OpenAI API (replace dots with underscores)
+        # OpenAI requires: ^[a-zA-Z0-9_-]+$
+        sanitized_name = original_tool_name.replace('.', '_')
+        
+        # Create async function that calls the MCP tool
+        async def call_mcp_tool(**kwargs):
+            """Call the MCP tool through the gateway."""
+            result_text = None
+            auth_error = None
+            
+            try:
+                # Need to create a new session for each call
+                async with streamablehttp_client(gateway_url, headers=headers) as (read, write, _):
+                    async with ClientSession(read, write) as new_session:
+                        await new_session.initialize()
+                        
+                        # Call the tool using original MCP name
+                        result = await new_session.call_tool(original_tool_name, kwargs)
+                        
+                        # Check if result indicates error (like authorization)
+                        if result.isError if hasattr(result, 'isError') else False:
+                            error_content = []
+                            for content in result.content:
+                                if isinstance(content, types.TextContent):
+                                    error_content.append(content.text)
+                            error_msg = "\n".join(error_content)
+                            
+                            # Check if it's an authorization error
+                            if "authorization" in error_msg.lower() or "authorize" in error_msg.lower():
+                                auth_error = f"🔒 AUTHORIZATION_REQUIRED: {error_msg}"
+                            else:
+                                raise Exception(f"Tool error: {error_msg}")
+                        
+                        # Extract text content from result
+                        if not auth_error:
+                            if result.content:
+                                text_parts = []
+                                for content in result.content:
+                                    if isinstance(content, types.TextContent):
+                                        text_parts.append(content.text)
+                                    elif isinstance(content, types.ImageContent):
+                                        text_parts.append(f"[Image: {content.mimeType}]")
+                                    elif isinstance(content, types.EmbeddedResource):
+                                        if hasattr(content.resource, 'text'):
+                                            text_parts.append(content.resource.text)
+                                
+                                result_text = "\n".join(text_parts) if text_parts else "Tool executed successfully"
+                                
+                                # Also check result text for auth URLs
+                                if "authorization_url" in result_text.lower() or "authorize" in result_text.lower():
+                                    # Try to parse JSON for auth URL
+                                    try:
+                                        import json
+                                        data = json.loads(result_text)
+                                        if "authorization_url" in data:
+                                            auth_error = f"🔒 AUTHORIZATION_REQUIRED: {data['authorization_url']}"
+                                    except json.JSONDecodeError:
+                                        pass
+                            else:
+                                result_text = "Tool executed successfully"
+                            
+            except Exception as session_error:
+                # Suppress harmless "Session termination failed: 202" errors during session cleanup
+                error_msg = str(session_error)
+                if "Session termination failed" in error_msg or "202" in error_msg:
+                    pass  # Ignore and continue to return result
+                else:
+                    # Real error, re-raise
+                    raise
+            
+            # If we found an auth error, raise it
+            if auth_error:
+                raise Exception(auth_error)
+            
+            return result_text if result_text else "Tool executed successfully"
+        
+        # Parse input schema from MCP tool
+        input_schema = mcp_tool.inputSchema if hasattr(mcp_tool, 'inputSchema') else {}
+        
+        # Create LangChain StructuredTool with sanitized name
+        return StructuredTool(
+            name=sanitized_name,
+            description=mcp_tool.description or f"Tool: {original_tool_name}",
+            coroutine=call_mcp_tool,
+            args_schema=None,  # Could parse inputSchema to create pydantic model
+        )
     
     def _create_agent(self, agent_id: str, config: Dict[str, Any]):
         """Create a LangChain agent from configuration."""
@@ -157,8 +374,12 @@ class YAMLAgentSystem:
     
     def _get_agent_tools(self, tool_configs: List[Union[str, Dict[str, Any]]]) -> List:
         """Get filtered tools for an agent based on configuration."""
-        if not self.tools or not tool_configs:
+        if not self.tools:
             return []
+        
+        # If no tool configuration specified, give agent ALL tools from MCP gateway
+        if not tool_configs:
+            return self.tools
         
         agent_tools = []
         
@@ -482,8 +703,15 @@ class YAMLAgentSystem:
             }
             final_state = None
             
+            iteration_count = 0
             async for event in self.graph.astream(initial_state, config):
+                iteration_count += 1
                 if self.debug:
+                    print(f"\n[ITERATION {iteration_count}]")
+                    # Show which node is executing
+                    for node_name in event.keys():
+                        if node_name not in ["__end__", "__interrupt__"]:
+                            print(f"[EXECUTING NODE] {node_name}")
                     print(f"[GRAPH EVENT] {event}")
                 final_state = event
                 
@@ -510,15 +738,35 @@ class YAMLAgentSystem:
                     if node_name != "__end__" and node_name != "__interrupt__" and "messages" in node_state:
                         messages = node_state["messages"]
                         if messages:
+                            # Check for authorization in ToolMessage errors
+                            from langchain_core.messages import ToolMessage
+                            for msg in messages:
+                                if isinstance(msg, ToolMessage) and "🔒 AUTHORIZATION_REQUIRED:" in msg.content:
+                                    # Extract the authorization URL
+                                    import re
+                                    auth_match = re.search(r'🔒 AUTHORIZATION_REQUIRED:\s*(https?://[^\s\'")\]]+)', msg.content)
+                                    if auth_match:
+                                        auth_url = auth_match.group(1)
+                                        self.auth_required = auth_url
+                                        responses.clear()  # Clear any previous responses
+                                        responses.append(f"🔒 Authorization required. Please click here to authorize:\n{auth_url}")
+                                        if self.debug:
+                                            print(f"[AUTH] Found authorization URL: {auth_url}")
+                                        return responses  # Return immediately with auth URL
+                            
                             last_msg = messages[-1]
                             if isinstance(last_msg, AIMessage) and last_msg.content:
                                 content = last_msg.content.strip()
+                                
+                                # In debug mode, always show supervisor routing decisions
+                                if self.debug and ("supervisor" in node_name.lower()):
+                                    print(f"[SUPERVISOR {node_name}] Routing decision: '{content}'")
                                 
                                 # Skip supervisor routing messages
                                 routing_keywords = ["ticket", "knowledge", "escalation", "COMPLETE"]
                                 if content.upper() not in routing_keywords and len(content) > 10:
                                     if self.debug:
-                                        print(f"[RESPONSE] From {node_name}: {content}")
+                                        print(f"[RESPONSE] From {node_name}: {content[:100]}...")
                                     
                                     # Check for authorization required
                                     if "🔒 AUTHORIZATION_REQUIRED:" in content:
